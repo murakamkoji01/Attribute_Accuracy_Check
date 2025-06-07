@@ -1,0 +1,11 @@
+neologd
+argparse
+tqdm
+mecab-python3
+Dataset
+pipeline
+datasets
+demoji
+pandas
+torch
+unicodedata
