@@ -71,18 +71,27 @@
    2. メインスクリプト内のneologd辞書のパスの確認
 
 3. 処理
-   * 処理(A)：通常処理
-      * `python3 -syn {$FILE_SYN} -attid ${FILE_ATTID} -avalue ${FILE_ATTID} -f ${FILE2} > ${FILE3}`
+  * 処理(1) : 辞書（属性定義、属性値、同義語、ブランド・シリーズ曖昧性解消）を適用、情報付与。ハイライト情報付与
+    * python3 src/check_att_csv_v3.py -syn ${DIC_SYN} -attid ${DIC_ATTID} -avalue ${DIC_ATTVALUE} -braser -braserdic ${DIC_BRASER} -high -f ${TGT_FILE} -o ${OUT_FILE} > tmp
 
-   * 処理(B)：入力属性値が商品情報中の文字列とマッチする際にハイライトする(`<highlight>${TOKEN}</highlight>`となる)（注意）下記課題参照のこと
-      * `python3 -highlight -syn {$FILE_SYN} -attid ${FILE_ATTID} -avalue ${FILE_ATTID} -f ${FILE2} > ${FILE4}`
+  * 処理(2) : 機械学習用データに変換
+    * python3 src/mk_data.py -cpath ${DIC_CPATH} -f ${OUT_FILE} -o ${MODEL_INPUT} > tmp
+
+  * Attribute Accuracy Check Classifierの適用
+    * python3 src/attcheck_pipeline.py -model ${MODEL} -testfile ${MODEL_INPUT} > ${PREDICTION_RESULT}
+
+  * 認識結果のマージ、Hanko入力用データの作成
+    * python3 src/merge_sku_prediction.py -sku ${OUT_FILE_SELECTED} -pred ${PREDICTION_RESULT} -o ${INPUT_HANKO}
+
+  * Attribute Accuracy Check分析用のデータ抽出
+    * grep -E "(MANDATORY|OPTIONAL),(10|11|14|21|24|31|34|40|41|44)," ${INPUT_HAKO} > ${OUT_FILE_SELECTED}
 
 
 ## 付与される情報について
 1. 付与される情報
    * 基本的に元ファイルの先頭に3カラム増える
-   1. 第1カラム：店舗入力の属性が必須(MANDATORY)か任意(OPTIONAL)か
-   2. 第2カラム：店舗入力の属性値がどこに存在したか
+   1. 'M/O'カラム：店舗入力の属性が必須(MANDATORY)か任意(OPTIONAL)か
+   2. '0'カラム：店舗入力の属性値がどこに存在したか
       * 正規表現ベースとトークナイズによる辞書ベースがある
       * 出力は2桁の数字、1桁目は辞書ベース、2桁目が正規表現ベース
 
@@ -96,13 +105,25 @@
       
       * 複数の位置に認識されることが考えられるが、1 -> 4 -> 3 -> 2の優先度で検索している
       * "04"の場合、辞書ベースでは属性値が発見されなかったが、正規表現ではsku_infoに属性値を認識した、という意味になる
-   3. 第3カラム：店舗入力の属性値がどの辞書に存在したか
+   3. '00'：店舗入力の属性値がどの辞書に存在したか
       | ID | 言語資源 |
       |:--:|:---------|      
       | 1  | 同義語辞書に属性値が登録 |
       | 2  | 属性値辞書に属性値が登録 |
       | 3  | 同義語辞書、属性値辞書の両方に属性値が登録 |
       | 0  | 同義語辞書、属性値辞書のどちらにも属性値が未登録 |
+
+   4. 'highlight'カラム：
+      * '0'カラムの情報から、ハイライト処理（色を変更）する文字列を指定
+   5. 'suggestion'カラム：
+      * 辞書登録があれば、過去のアノテーションからの提案（ブランド名もしくはシリーズ名であるかそうでないか）
+   6. 'past_records'カラム：
+      * 辞書登録があれば、過去のアノテーションで対象の属性値がシリーズ名、ブランド名としてどう扱われてきたかの統計情報
+   7. 'prediction'カラム：
+      * 分類器の出力   
+   8. 'score'カラム：
+      * 分類器の出力
+
 
 ## 課題・問題点
 * 何故かかなり重い．MeCabを使っているので完全な文字処理よりは時間がかかるがどこかでおかしな処理をしているかも
